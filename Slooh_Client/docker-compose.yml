@@ -1,0 +1,20 @@
+version: '3.8'
+
+services:
+  slooh-client:
+    image: nginx:1.27.3
+    container_name: slooh-client
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    env_file:
+      - ./.env
+    volumes:
+      - ./dist:/usr/share/nginx/html
+      - ./default.conf:/etc/nginx/conf.d/default.conf
+    networks:
+      - slooh-network
+
+networks:
+  slooh-network:
+    driver: bridge
