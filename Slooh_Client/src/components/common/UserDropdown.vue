@@ -14,7 +14,7 @@ function redirectProfile() {
 }
 
 function redirectChangePassword() {
-  router.push({ name: 'Profile', hash: '#password' })
+  router.push({ name: 'ChangePassword' })
 }
 async function handleLogout() {
   await authStore.logout()
