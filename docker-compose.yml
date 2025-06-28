@@ -1,0 +1,78 @@
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:17
+    container_name: slooh-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USERNAME:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-secret}
+      POSTGRES_DB: ${POSTGRES_DB:-slooh_db}
+    ports:
+      - '${POSTGRES_PORT:-5432}:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - slooh-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USERNAME:-postgres}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Node.js Backend Server
+  server:
+    build:
+      context: ./Slooh_Server
+      dockerfile: Dockerfile
+    container_name: slooh-server
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: 'postgresql://${POSTGRES_USERNAME:-postgres}:${POSTGRES_PASSWORD:-secret}@postgres:5432/${POSTGRES_DB:-slooh_db}?schema=public'
+      NODE_ENV: ${NODE_ENV:-development}
+      PORT: ${SERVER_PORT:-3000}
+    ports:
+      - '${SERVER_PORT:-3000}:3000'
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./Slooh_Server:/usr/src/node-app
+      - /usr/src/node-app/node_modules
+      - /usr/src/node-app/build
+    networks:
+      - slooh-network
+    command: >
+      sh -c "
+        npx prisma generate &&
+        npx prisma db push &&
+        if [ '${NODE_ENV}' = 'production' ]; then
+          yarn start
+        else
+          yarn dev -L
+        fi
+      "
+
+  # Vue.js Frontend Client
+  client:
+    build:
+      context: ./Slooh_Client
+      dockerfile: Dockerfile
+    container_name: slooh-client
+    restart: unless-stopped
+    environment:
+      - VITE_API_URL=${VITE_API_URL:-http://localhost:3000}
+    ports:
+      - '${CLIENT_PORT:-80}:80'
+    depends_on:
+      - server
+    networks:
+      - slooh-network
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  slooh-network:
+    driver: bridge

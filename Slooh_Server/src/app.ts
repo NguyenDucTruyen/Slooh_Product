@@ -50,6 +50,7 @@ app.use(xss());
 app.use(compression());
 
 // enable cors with proper config for Socket.IO
+// enable cors with proper config for Socket.IO
 const corsOptions = {
   origin: function (
     origin: string | undefined,
@@ -60,19 +61,35 @@ const corsOptions = {
       return callback(null, true);
     }
 
+    // Log để debug
+    console.log('CORS check - Origin:', origin);
+    console.log('config.appUrl.client:', config.appUrl.client);
+
     // In development mode, allow specific localhost origins
     const allowedOrigins = [
       config.appUrl.client, // Use config instead of process.env
+      'http://localhost',
+      'http://localhost:80',
       'http://localhost:3000',
       'http://localhost:5173',
       'http://127.0.0.1:3000',
       'http://127.0.0.1:5173',
-      'http://localhost:4173' // Vite preview port
+      'http://localhost:4173', // Vite preview port
+      // Docker container names
+      'http://client',
+      'http://slooh-client',
+      'http://client:80',
+      'http://slooh-client:80'
     ].filter(Boolean);
 
-    if (allowedOrigins.includes(origin)) {
+    // Check if origin is from Docker network (172.x.x.x or 192.x.x.x)
+    const isDockerNetwork = origin.match(/^https?:\/\/(172\.|192\.|10\.)/);
+
+    if (allowedOrigins.includes(origin) || isDockerNetwork) {
       callback(null, true);
     } else {
+      console.log('CORS rejected origin:', origin);
+      console.log('Allowed origins:', allowedOrigins);
       callback(new Error('Not allowed by CORS'));
     }
   },
