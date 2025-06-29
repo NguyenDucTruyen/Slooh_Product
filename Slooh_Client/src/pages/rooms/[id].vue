@@ -67,32 +67,53 @@ const indexSelectedSlide = computed(() => {
 })
 
 async function handleSave() {
-  const formatData: BodyUpdateRoom = {
-    tenPhong: roomDetail.value.tenPhong,
-    hoatDong: roomDetail.value.hoatDong,
-    trangThai: roomDetail.value.trangThai,
-    danhSachTrang: (slides.value ?? []).map((slide: Slide): UpdateSlide => ({
-      loaiTrang: slide.loaiTrang,
-      tieuDe: slide.tieuDe,
-      hinhAnh: slide.hinhAnh,
-      hinhNen: slide.hinhNen,
-      canLeNoiDung: slide.canLeNoiDung,
-      canLeTieuDe: slide.canLeTieuDe,
-      cachTrinhBay: slide.cachTrinhBay?.trim() ? slide.cachTrinhBay : null,
-      noiDung: slide.noiDung,
-      thoiGianGioiHan: slide.thoiGianGioiHan,
-      diem: slide.diem,
-      loaiCauTraLoi: slide.loaiCauTraLoi,
-      danhSachLuaChon: slide.loaiTrang === LoaiSlide.CAU_HOI ? slide.luaChon : undefined,
-    })),
-  }
+  try {
+    const formatData: BodyUpdateRoom = {
+      tenPhong: roomDetail.value.tenPhong,
+      hoatDong: roomDetail.value.hoatDong,
+      trangThai: roomDetail.value.trangThai,
+      danhSachTrang: (slides.value ?? []).map((slide: Slide): UpdateSlide => ({
+        loaiTrang: slide.loaiTrang,
+        tieuDe: slide.tieuDe,
+        hinhAnh: slide.hinhAnh,
+        hinhNen: slide.hinhNen,
+        canLeNoiDung: slide.canLeNoiDung,
+        canLeTieuDe: slide.canLeTieuDe,
+        cachTrinhBay: slide.cachTrinhBay?.trim() ? slide.cachTrinhBay : null,
+        noiDung: slide.noiDung,
+        thoiGianGioiHan: slide.thoiGianGioiHan,
+        diem: slide.diem,
+        loaiCauTraLoi: slide.loaiCauTraLoi,
+        danhSachLuaChon: slide.loaiTrang === LoaiSlide.CAU_HOI ? slide.luaChon : undefined,
+      })),
+    }
 
-  await roomStore.updateRoom(roomDetail.value.maPhong, formatData)
-  hasChanges.value = false
-  toast({
-    title: 'Cập nhật thành công',
-    description: 'Phòng đã được cập nhật thành công.',
-  })
+    await roomStore.updateRoom(roomDetail.value.maPhong, formatData)
+    hasChanges.value = false
+    toast({
+      title: 'Cập nhật thành công',
+      description: 'Phòng đã được cập nhật thành công.',
+    })
+  }
+  catch (error) {
+    const errorMessage = error?.response?.data?.message || error?.message || 'Something went wrong.'
+    if (errorMessage) {
+      toast({
+        title: 'Lỗi',
+        description: errorMessage,
+        variant: 'destructive',
+        duration: 5000,
+      })
+      return
+    }
+
+    toast({
+      title: 'Lỗi',
+      description: 'Có lỗi xảy ra trong quá trình xử lý yêu cầu của bạn.',
+      variant: 'destructive',
+      duration: 5000,
+    })
+  }
 }
 
 async function handleBack() {
