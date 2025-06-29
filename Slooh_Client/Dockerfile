@@ -15,9 +15,6 @@ RUN pnpm install --frozen-lockfile
 # Copy source code
 COPY . .
 
-# Copy .env file từ thư mục parent
-COPY ../.env ./.env
-
 # Build the application
 RUN pnpm build
 

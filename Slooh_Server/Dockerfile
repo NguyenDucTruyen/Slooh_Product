@@ -15,9 +15,6 @@ RUN yarn install --frozen-lockfile
 # Copy source code
 COPY . .
 
-# Copy .env file từ thư mục parent
-COPY ../.env ./.env
-
 # Generate Prisma Client
 RUN npx prisma generate
 
