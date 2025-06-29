@@ -4,7 +4,9 @@ import { toast } from '@/components/ui/toast'
 onMounted(() => {
   window.addEventListener('unhandledrejection', (event) => {
     event.promise.catch((error: any) => {
+      console.log('Unhandled Rejection:', error)
       const errorMessage = error?.response?.data?.message || error?.message || 'Something went wrong.'
+      console.error('Unhandled Error Message:', errorMessage)
       if (errorMessage) {
         toast({
           title: 'Lỗi',
