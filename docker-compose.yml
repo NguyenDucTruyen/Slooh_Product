@@ -63,11 +63,14 @@ services:
     environment:
       - VITE_API_URL=${VITE_API_URL:-http://localhost:3000}
     ports:
-      - '${CLIENT_PORT:-80}:80'
+      - '80:80'
+      - '443:443'  # Add HTTPS port mapping
     depends_on:
       - server
     networks:
       - slooh-network
+    volumes:
+      - ./ssl:/etc/nginx/ssl:ro  # Mount SSL certificates as read-only
 
 volumes:
   postgres_data:

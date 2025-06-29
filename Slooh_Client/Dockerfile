@@ -27,7 +27,11 @@ COPY --from=builder /app/dist /usr/share/nginx/html
 # Copy nginx config if exists
 COPY --from=builder /app/default.conf /etc/nginx/conf.d/default.conf
 
-# Expose port 80
+# Copy SSL certs from source
+COPY --from=builder /app/ssl /etc/nginx/ssl
+
+# Expose ports
 EXPOSE 80
+EXPOSE 443
 
 CMD ["nginx", "-g", "daemon off;"]
