@@ -23,7 +23,7 @@ class SocketServer {
           // Log để debug
           logger.info(`Socket.IO CORS check - Origin: ${origin}`);
 
-          // Allow requests with no origin
+          // Allow requests with no origin (server-to-server, Postman, etc.)
           if (!origin) return callback(null, true);
 
           // In development, allow all origins
@@ -34,6 +34,11 @@ class SocketServer {
           // In production, check against allowed origins
           const allowedOrigins = [
             config.appUrl.client,
+            'https://ductruyen.site',
+            'https://www.ductruyen.site',
+            'http://ductruyen.site',
+            'http://www.ductruyen.site',
+            // Local development
             'http://localhost',
             'http://localhost:80',
             'http://localhost:3000',
@@ -51,8 +56,11 @@ class SocketServer {
 
           // Allow Docker network IPs
           const isDockerNetwork = origin.match(/^https?:\/\/(172\.|192\.|10\.)/);
+          
+          // Allow Cloudflare IPs (khi request đi qua Cloudflare proxy)
+          const isCloudflareIP = origin.match(/^https?:\/\/(103\.21\.|103\.22\.|103\.31\.|104\.16\.|108\.162\.|131\.0\.|141\.101\.|162\.158\.|172\.64\.|173\.245\.|188\.114\.|190\.93\.|197\.234\.|198\.41\.)/);
 
-          if (allowedOrigins.includes(origin) || isDockerNetwork) {
+          if (allowedOrigins.includes(origin) || isDockerNetwork || isCloudflareIP) {
             callback(null, true);
           } else {
             logger.error(`Socket.IO CORS rejected origin: ${origin}`);
@@ -60,17 +68,34 @@ class SocketServer {
           }
         },
         credentials: true,
-        methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS']
+        methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+        allowedHeaders: ['Authorization', 'Content-Type'],
+        exposedHeaders: ['Authorization']
       },
-      // Quan trọng: Cấu hình để tương thích với client
+      // Quan trọng: Cấu hình để tương thích với client và proxy
       allowEIO3: true, // Allow Engine.IO v3 clients
-      transports: ['polling', 'websocket'], // Explicitly set transports
+      transports: ['polling', 'websocket'], // Polling first for better compatibility
       path: '/socket.io/', // Đảm bảo path đúng
       serveClient: false, // Không serve client files
       pingTimeout: 60000, // Tăng timeout
       pingInterval: 25000,
-      upgradeTimeout: 10000,
-      maxHttpBufferSize: 1e6 // 1MB
+      upgradeTimeout: 30000, // Tăng timeout cho WebSocket upgrade
+      maxHttpBufferSize: 1e6, // 1MB
+      
+      // Thêm cấu hình cho production với reverse proxy
+      allowRequest: (req, callback) => {
+        // Log headers để debug
+        logger.info('Socket.IO request headers:', {
+          'x-forwarded-for': req.headers['x-forwarded-for'],
+          'x-real-ip': req.headers['x-real-ip'],
+          'x-forwarded-proto': req.headers['x-forwarded-proto'],
+          'origin': req.headers.origin,
+          'host': req.headers.host
+        });
+        
+        // Always allow in production (CORS will handle origin check)
+        callback(null, true);
+      }
     });
 
     // Log Engine.IO errors để debug
@@ -78,20 +103,35 @@ class SocketServer {
       logger.error('Socket.IO Engine connection error:', {
         type: err.type,
         message: err.message,
-        context: err.context
+        context: err.context,
+        req: err.req ? {
+          url: err.req.url,
+          headers: err.req.headers
+        } : undefined
       });
     });
 
     this.setupMiddleware();
     this.setupHandlers();
 
-    logger.info('Socket.IO server initialized');
+    logger.info('Socket.IO server initialized with config:', {
+      env: config.env,
+      clientUrl: config.appUrl.client,
+      cors: this.io.opts.cors
+    });
   }
 
   private setupMiddleware() {
     // Authentication middleware
     this.io.use(async (socket: AuthenticatedSocket, next) => {
       try {
+        // Log connection attempt
+        logger.info('Socket authentication attempt:', {
+          socketId: socket.id,
+          headers: socket.handshake.headers,
+          auth: socket.handshake.auth
+        });
+
         const token =
           socket.handshake.auth?.token ||
           socket.handshake.headers?.authorization?.replace('Bearer ', '');
@@ -144,23 +184,30 @@ class SocketServer {
   private setupHandlers() {
     this.io.on('connection', (socket: AuthenticatedSocket) => {
       const userId = socket.user?.maNguoiDung || 'anonymous';
-      logger.info(`Socket connected - User: ${userId}, Socket ID: ${socket.id}`);
+      const clientIp = socket.handshake.headers['x-forwarded-for'] || 
+                      socket.handshake.headers['x-real-ip'] || 
+                      socket.handshake.address;
+                      
+      logger.info(`Socket connected - User: ${userId}, Socket ID: ${socket.id}, IP: ${clientIp}`);
 
       // Send connection success
       socket.emit('connected', {
         socketId: socket.id,
-        userId: userId
+        userId: userId,
+        timestamp: new Date().toISOString()
       });
 
       // Setup handlers for presentation sessions
       phienTrinhChieuHandler(socket, this.io);
 
       // Test event để debug
-      socket.on('ping', (callback) => {
-        logger.info(`Ping received from ${userId}`);
+      socket.on('ping', (data, callback) => {
+        logger.info(`Ping received from ${userId}`, data);
         if (typeof callback === 'function') {
-          callback('pong');
+          callback({ pong: true, timestamp: new Date().toISOString() });
         }
+        // Also emit back for clients that don't use callbacks
+        socket.emit('pong', { timestamp: new Date().toISOString() });
       });
 
       // Handle disconnection
@@ -173,15 +220,22 @@ class SocketServer {
         logger.error(`Socket error for user ${userId}:`, error);
       });
 
-      // Handle reconnection
-      socket.on('reconnect', () => {
-        logger.info(`Socket reconnected - User: ${userId}`);
+      // Handle reconnection attempt
+      socket.on('reconnect_attempt', (attemptNumber) => {
+        logger.info(`Socket reconnection attempt ${attemptNumber} - User: ${userId}`);
       });
     });
 
     // Log general connection errors
     this.io.on('connection_error', (error) => {
       logger.error('Socket.IO connection error:', error);
+    });
+
+    // Health check endpoint for monitoring
+    this.io.on('health', (callback) => {
+      if (typeof callback === 'function') {
+        callback({ status: 'ok', connections: this.io.sockets.sockets.size });
+      }
     });
   }
 

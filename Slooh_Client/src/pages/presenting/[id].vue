@@ -93,7 +93,7 @@ onMounted(async () => {
 
     // Create session for this room
     await session.createSession(roomId)
-    const url = `${import.meta.env.VITE_API_URL}/session/${session.sessionData.maPhien}`
+    const url = `${import.meta.env.VITE_SOCKET_URL}/session/${session.sessionData.maPin}`
     qrcode.value = useQRCode(url, {
       size: 256,
       margin: 1,
