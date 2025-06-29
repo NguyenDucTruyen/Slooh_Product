@@ -40,8 +40,6 @@ services:
       - ./Slooh_Server:/usr/src/node-app
       - /usr/src/node-app/node_modules
       - /usr/src/node-app/build
-      # Mount .env file vào server
-      - ./.env:/usr/src/node-app/.env:ro
     networks:
       - slooh-network
     command: >
@@ -68,9 +66,6 @@ services:
       - '${CLIENT_PORT:-80}:80'
     depends_on:
       - server
-    volumes:
-      # Mount .env file vào client (trong build stage)
-      - ./.env:/app/.env:ro
     networks:
       - slooh-network
 
